@@ -1,0 +1,1 @@
+var logger = require('../logger');logger.debug('test');logger.info('test');logger.warn('test');logger.error('test');logger.fatal('test');

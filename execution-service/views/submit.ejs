@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title><%= title %></title>
+  <link rel='stylesheet' href='/stylesheets/style.css' />
+</head>
+<body>
+  <h1><%= title %></h1>
+  <p>Submit a <%=type%> job</p>
+  <form method="post" enctype="multipart/form-data" action="/api/1/jobs/type/<%=type%>">
+    <label>Username: <input type="text" name="Username"/></label><br/>
+    <label>Password: <input type="password" name="Password"/></label><br/>
+    <br/>
+    <label>Schedule Name: <input type="text" name="Schedule"/></label><br/>
+    <label>Input (JSON): <textarea name="JsonInput"></textarea></label><br/>
+    <label>Input Files (JSON): <textarea name="JsonInputFiles"></textarea></label><br/>
+    <label>Input Files: <input type="file" name="InputFiles" multiple="multiple"/></label><br/>
+    <input type="submit" value="submit" id="formSubmitButton"/>
+  </form>
+</body>
+</html>
