@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Convert Weather Data format from BOM to Daycent</title>
+  <link rel="stylesheet" type="text/css"  href="http://ajax.googleapis.com/ajax/libs/jqueryui/1/themes/base/jquery-ui.css" />
+  <script src="http://ajax.googleapis.com/ajax/libs/jquery/1/jquery.min.js"></script>
+  <script src="http://ajax.googleapis.com/ajax/libs/jqueryui/1/jquery-ui.min.js"></script>
+  <script src="DataTable.js"></script>
+  <script>
+    var msday = 24*60*60*1000;
+    function dayOfYear(year, month, day) {
+      var d1 = new Date(year, 1, 1);
+      var d2 = new Date(year, month, day);
+      return ((d2-d1)/msday)+1;
+    }
+    
+    function createDaycentTable() {
+      var dtDaycent = new DataTable();
+      dtDaycent.addCol('day');
+      dtDaycent.addCol('month');
+      dtDaycent.addCol('year');
+      dtDaycent.addCol('dayOfYear');
+      dtDaycent.addCol('maxTemp');
+      dtDaycent.addCol('minTemp');
+      dtDaycent.addCol('rainfall');
+      return dtDaycent;
+    }
+    
+    $(function() {
+      $('#tabs').tabs();
+      $('#buttonConvert1').click(function(){
+        var dtBom = new DataTable();
+        var dtDaycent = createDaycentTable();
+        dtBom.fromText($('#textin1').val(), DataTextParser.CSV, true);
+        var lastYear = 0, doy = 0;
+        dtBom.forEachRow( function(row) {
+          var r = dtDaycent.addRow();
+          var date = row.getCol(1).split('-');
+          if (lastYear == 0) {
+            doy = dayOfYear(date[0], date[1], date[2]);
+          } else if (lastYear != date[0]) {
+            doy = 1;
+            lastYear = date[0];
+          }
+          dtDaycent.set(r, 0, date[2]);
+          dtDaycent.set(r, 1, date[1]);
+          dtDaycent.set(r, 2, date[0]);
+          dtDaycent.set(r, 3, doy);
+          dtDaycent.set(r, 4, row.getCol(3));
+          dtDaycent.set(r, 5, row.getCol(2));
+          dtDaycent.set(r, 6, Math.round(row.getCol(4)*100)/1000);
+        });
+        var wth = dtDaycent.toText(DataTextFormat.TSV, true)
+        $('#textout').val(wth);
+      });
+      
+      $('#buttonConvert2').click(function(){
+        var dtBomMinTemp = new DataTable();
+        var dtBomMaxTemp = new DataTable();
+        var dtBomRainfall = new DataTable();
+        dtBomMinTemp.fromText($('#textin2a').val(), DataTextParser.CSV, true);
+        dtBomMaxTemp.fromText($('#textin2b').val(), DataTextParser.CSV, true);
+        dtBomRainfall.fromText($('#textin2c').val(), DataTextParser.CSV, true);
+        
+        var dtDaycent = createDaycentTable();
+        var lastYear = 0, doy = 0;
+        for (var i=0; i<dtBomMinTemp.rowSize();++i) {
+          var r = dtDaycent.addRow();
+          var year = dtBomMinTemp.get(i,2);
+          var month = dtBomMinTemp.get(i,3);
+          var day = dtBomMinTemp.get(i,4);
+          var mint = dtBomMinTemp.get(i,5)
+          var maxt = dtBomMaxTemp.get(i,5)
+          var rain = dtBomRainfall.get(i,5)
+          if (lastYear == 0) {
+            doy = dayOfYear(year, month, day);
+          } else if (lastYear != year) {
+            doy = 1;
+            lastYear = year;
+          }
+          dtDaycent.set(r, 0, year);
+          dtDaycent.set(r, 1, month);
+          dtDaycent.set(r, 2, day);
+          dtDaycent.set(r, 3, doy);
+          dtDaycent.set(r, 4, maxt);
+          dtDaycent.set(r, 5, mint);
+          dtDaycent.set(r, 6, Math.round(rain*100)/1000);
+        }
+        var wth = dtDaycent.toText(DataTextFormat.TSV, true)
+        $('#textout').val(wth);
+      });
+      
+      $('#buttonTest').click(function(){
+        var newWindow = window.open('data:text/csv,'+encodeURIComponent('asdfsadf sd'),'test');
+      });
+    });
+    
+  </script>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: Arial,Times New Roman;
+      font-size: 12px;
+    }
+    body .ui-widget {
+      font-family: Arial,Times New Roman;
+      font-size: 12px;
+    }
+    #source {
+      width: 49%;
+      height: 100%;
+      float: left;
+    }
+    #target {
+      width: 49%;
+      height: 100%;
+      float: left;
+      border-left: 2px solid black;
+    }
+    #wrapper {
+      min-height: 100%;
+      height: 100%;
+    }
+    .container {
+      margin: 0 10px;
+    }
+    textarea {
+      font-family: monospace !important;
+      white-space: nowrap;
+    }
+    .autosize {
+      width: 99%;
+      height: 500px;
+    }
+    .cols3 {
+      width: 33.3%;
+      float: left;
+    }
+  </style>
+</head>
+<body>
+  <div id="wrapper">
+    <div id="source">
+      <div class="container">
+        <h2>Enter BOM data here</h2>
+        <div id="tabs">
+          <ul>
+            <li><a href="#tabs-1">Complete data</a></li>
+            <li><a href="#tabs-2">Partial data</a></li>
+          </ul>
+          <div id="tabs-1">
+            <textarea id="textin1" class="autosize"></textarea>
+            <input id="buttonConvert1" type="button" value="Convert"/>
+          </div>
+          <div id="tabs-2">
+            <div class="cols3">
+              <h3>Minimum Temperature</h3>
+              <textarea id="textin2a" class="autosize" spellcheck="false"></textarea>
+            </div>
+            <div class="cols3">
+              <h3>Maximum Temperature</h3>
+              <textarea id="textin2b" class="autosize" spellcheck="false"></textarea>
+            </div>
+            <div class="cols3">
+              <h3>Rainfall in mm</h3>
+              <textarea id="textin2c" class="autosize" spellcheck="false"></textarea>
+            </div>
+            <input id="buttonConvert2" type="button" value="Convert"/>
+          </div>        
+        </div>
+      </div>
+    </div>
+    <div id="target">
+      <div class="container">
+        <h2>Converted data in Daycent format</h2>
+        <textarea id="textout" class="autosize"></textarea>
+        <input id="buttonTest" type="button" value="Test"/>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
