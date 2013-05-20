@@ -1,0 +1,12 @@
+{
+  "name": "semaphore_services_executor",
+  "version": "0.0.1",
+  "private": true,
+  "dependencies": {
+    "methods": "*",
+    "express": "*",
+    "ejs": "*",
+    "request": "*",
+    "less-middleware": "*"
+  }
+}
