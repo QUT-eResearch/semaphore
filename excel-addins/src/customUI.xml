@@ -3,7 +3,10 @@
     <tabs>
       <tab id="tabSemaphore" label="Semaphore">
         <group id="groupImportData" label="Import Data">
-          <button id="buttonImportCent" imageMso="ImportTextFile" size="large" label="Century/Daycent" screentip="Import Century/Daycent output data" onAction="ModuleImport.RibbonImportButton" /> 
+          <button id="buttonImportCent" imageMso="ImportTextFile" size="large" label="Century / Daycent" screentip="Import Century/Daycent output data" onAction="ModuleImport.RibbonImportButton" /> 
+        </group>
+        <group id="groupUpdateData" label="Update Imported Data">
+          <button id="buttonUpdateCent" imageMso="DataRefreshAll" size="large" label="Refresh Data" screentip="Update imported Century/Daycent output data" onAction="ModuleImport.RibbonUpdateButton" /> 
         </group>
       </tab>
     </tabs>

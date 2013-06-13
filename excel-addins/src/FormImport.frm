@@ -18,7 +18,11 @@ Private Sub UserForm_Initialize()
     ModuleImport.Init
     TextBoxDir.Text = ModuleImport.LastDir
     TextBoxLis.Text = ModuleImport.LastLis
-
+    If ModuleImport.LastModel = "century" Then
+      OptionCentury.Value = True
+    ElseIf ModuleImport.LastModel = "daycent" Then
+      OptionDaycent.Value = True
+    End If
 End Sub
 
 Private Sub ButtonBrowseDir_Click()
@@ -57,6 +61,11 @@ Private Sub ButtonBrowseLis_Click()
 End Sub
 
 Private Sub ButtonImport_Click()
+    If OptionCentury.Value = True Then
+      ModuleImport.LastModel = "century"
+    ElseIf OptionDaycent.Value = True Then
+      ModuleImport.LastModel = "daycent"
+    End If
     ModuleImport.LastDir = TextBoxDir.Text
     ModuleImport.LastLis = TextBoxLis.Text
     ModuleImport.ImportData
