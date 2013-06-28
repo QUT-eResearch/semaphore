@@ -1,6 +1,6 @@
 var path = require('path');
 var fsx = require('jsx').fsx;
-var logger = require('jsx').Logger(module);
+var logger = require('jsx').createLogger(module);
 
 function makecb(fn) {
   var args = Array.prototype.slice.call(arguments, 1);
@@ -15,7 +15,8 @@ module.exports = function (rel) {
 
   /** List all jobs */
   rel.get('', function (req, res) {
-    jobs.getJobIdsByRange(0, -1, function(err, ids) {
+    jobs.jobs({start:0, stop:-1}, function(err, ids) {
+      if (err) next(err);
       res.json(ids);
     });
   });
@@ -32,7 +33,7 @@ module.exports = function (rel) {
       res.json({ error: 'Invalid job type.' });
       return;
     }
-    jobs.getJobIdsByType(type, function(err, ids) {
+    jobs.jobs({type:type}, function(err, ids) {
       res.json(ids);
     });
   });
@@ -87,12 +88,26 @@ module.exports = function (rel) {
 
     for (var key in req.body) {
       var value = req.body[key];
-      if (isFile(value)) {
-        inputFiles[key] = value;
-      } else {
-        input[key] = value;
+      if (value) {
+        if (isFile(value)) inputFiles[key] = value;
+        else input[key] = value;
       }
     }
+    var attachments = req.files[rel.conf.str.paramInputFiles];
+    //check uploaded files
+    var nofile = true;
+    for (var key in req.files) {
+      if (req.files[key]) {
+        if (Array.isArray(req.files[key])) {
+          req.files[key].forEach(function(item){
+            if (item.size > 0) nofile = false;
+          });
+        } else {
+          if (req.files[key].size) nofile = false;
+        }
+      }
+    }
+    if (Object.keys(input).length == 0 && Object.keys(inputFiles).length == 0 && nofile) res.json({ error: 'empty input' });
 
     // Create a job
     jobs.create({type:req.params.type}, initJob);
@@ -113,13 +128,12 @@ module.exports = function (rel) {
           processUpload(req.files[rel.conf.str.paramInputFiles]);
           delete req.files[rel.conf.str.paramInputFiles];
         }
-        for (var key in req.files) {
-          processUpload(req.files[key], key);
-        }
+        //for (var key in req.files) processUpload(req.files[key], key);
         if (counter === 0) finished();
       }
       function processUpload(uploadedFile, key) {
         function move(file) {
+          if (file.size == 0) return;
           counter++;
           fsx.async.move(file.path, path.join(jobDir, file.name), finished);
           inputFiles[file.name] = rel.conf.getUrlToJobDataFile(job.id, file.name);

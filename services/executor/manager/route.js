@@ -6,8 +6,8 @@
 var methods = require('methods');
 var path = require('path');
 var fs = require('fs');
-var logger = require('jsx').Logger(module);
-var conf = require('./conf');
+var logger = require('jsx').createLogger(module);
+var conf = require('../config');
 var JobQueue = require('redis-jobq');
 var jobs = new JobQueue();
 
@@ -32,7 +32,7 @@ module.exports = function(app) {
 
   var stack = [];
   var dir, files;
-  var moduleDir = {route:'', path:'routes'};
+  var moduleDir = {route:'', path: path.join(__dirname, 'routes')};
   console.log(moduleDir);
   stack.push(moduleDir);
   while (dir = stack.pop()) {

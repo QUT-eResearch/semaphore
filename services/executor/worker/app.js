@@ -1,19 +1,21 @@
+"use strict";
 /*!
  * Semaphore CLI-wrapper web service - Cluster app that controls the worker node.
  */
 
 var cluster = require('cluster');
-var request = require('request');
+//var request = require('request');
 var fs = require('fs');
 var path = require('path');
-var logger = require('jsx').Logger(module);
+var logger = require('jsx').createLogger(module);
 var fsx = require('jsx').fsx;
-var conf = require('./conf');
+var conf = require('../config').worker;
 
 var PORT = 33000;
 var HOST = '127.0.0.1';
-//var numWorker = require('os').cpus().length;
-var numWorker = 1;
+var numCpu = require('os').cpus().length;
+var numWorker = numCpu > 1 ? numCpu - 1 : 1;
+//var numWorker = 1;
 var shutdownWorkers = 0;
 var shutdownRequested = false;
 
@@ -28,52 +30,76 @@ logger.debug("master pid:"+process.pid);
   }
   
   // Check if temp working dir exist and writeable, or can be created if not exist.
-  if (fs.existsSync(conf.tempWorkingDir)) {
-    var testfile = path.join(conf.tempWorkingDir, 'test');
+  if (fs.existsSync(conf.pathTemp)) {
+    var testfile = path.join(conf.pathTemp, 'test');
     try {
       fs.mkdirSync(testfile);
       fs.rmdirSync(testfile);
     } catch (ex) {
-      logger.fatal('No write access to the tempWorkingDir. Terminating..');
+      logger.fatal('No write access to config.pathTemp:`%s`. Terminating..', conf.pathTemp);
       process.exit();
     }
   } else {
     try { 
-      fs.mkdirSync(conf.tempWorkingDir);
+      fs.mkdirSync(conf.pathTemp);
     } catch (ex) {
-      logger.fatal('Cannot create tempWorkingDir. Terminating..');
+      logger.fatal('Cannot create config.pathTemp:`%s`. Terminating..', conf.pathTemp);
       process.exit();
     }
   }
   
   // Check for any unfinished jobs that will never be processed, require manual intervention.
   // i.e., the number of sub dir in the temp working dir is more than the number of worker processes (numWorker).
-  if (fsx.sync.countDir(conf.tempWorkingDir) > numWorker) {
+  if (fsx.sync.countDir(conf.pathTemp) > numWorker) {
     logger.fatal('The number of assigned workers is less than the previous unfinished jobs. Terminating..');
     process.exit();
   }
   
+  validateManager();
   // Check manager server status (API server is running)
-  (function validateManager() {
-    request(conf.manager.url.base, function (error, response, body) {
-      //logger.debug(response);
-      if (!error && response) {
-        logger.debug(body);
-        if (response.statusCode == 200) {
-          return done(); //all is good, continue by starting all workers
+  function validateManager() {
+    logger.debug('Try connectiong to manager [%s] using setting:', conf.protocol);
+    logger.debug(conf.protocols[conf.protocol]);
+    var manager = require('./protocols/'+conf.protocol)(conf.protocols[conf.protocol]);
+    manager.validate(function (isValid, reason) {
+      if (isValid) {
+        logger.debug('manager OK');
+        return ensureOpenstackStorage(); //all is good, continue
+      } else {
+        logger.fatal('Cannot access manager server. Reason: %s. Terminating..', reason);
+        process.exit();
+      }
+    });
+  }
+  
+  // Ensure storage container in the nectar cloud
+  function ensureOpenstackStorage() {
+    var openstack = require('openstack');
+    var storageConfig = require('../config').storage;
+    var swift = openstack.createClient(storageConfig.auth);
+    var container = storageConfig.container;
+    var headers = {'X-Container-Read':'.r:*'};
+    swift.createContainer({container:container, headers:headers}, function(err, status){
+      if (err) {
+        logger.fatal('Cannot access the cloud storage. Reason: %s. Terminating..', err);
+      } else {
+        if (status == 201 || status == 202) {
+          logger.debug('cloud storage OK');
+          return done();
+        } else {
+          logger.fatal('Cannot create container in the cloud storage. Reason: %s. Terminating..', status);
         }
       }
-      logger.fatal('Cannot access manager server. Terminating..');
       process.exit();
     });
-  })();
-  
+  }
+//})(function(){});
 })(startWorkers);
 
 function startWorkers() {
-  logger.debug('Starting workers..');
+  logger.debug('Creating %s workers.', numWorker);
   cluster.setupMaster({
-    exec : "worker.js"
+    exec : __dirname+"/worker.js"
     //silent : true
   });
 

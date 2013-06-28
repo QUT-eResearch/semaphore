@@ -7,7 +7,7 @@
  *   Retrieve a job of a particular type.
  *
  */
-var logger = require('jsx').Logger(module);
+var logger = require('jsx').createLogger(module);
 var fs = require('fs');
 
 module.exports = function (rel) {
@@ -35,14 +35,14 @@ module.exports = function (rel) {
   rel.get('/process', function(req, res){
     if (req.query && req.query.confirm) {
       var confirmedId = req.query.confirm;
-      jobs.confirmReserve(confirmedId, function() {
+      jobs.confirmReserve({id:confirmedId}, function() {
         res.json({confirm:1});
       });
     } else {
-      jobs.longestQueue(function(type) {
+      jobs.longestQueue(function(err, type) {
         if (!type) return res.json({});
         logger.debug('GET /process Processing job of type: ' + type);
-        jobs.reserve(type, function(job) {
+        jobs.reserve(type, function(err, job) {
           logger.debug(job);
           if (job) {
              res.json(job);
@@ -63,10 +63,12 @@ module.exports = function (rel) {
     req.on('end', function() {
       var job = JSON.parse(buf);
       logger.debug(job);
-      jobs.finish(job, function(e, r){
-        logger.debug('job '+id+' has been finished.');
-        logger.debug(e);
-        res.json({});
+      jobs.save(job, function() {
+        jobs.finish(job, function(e, r){
+          logger.debug('job '+id+' has been finished.');
+          logger.debug(e);
+          res.json({});
+        });
       });
     });
   });

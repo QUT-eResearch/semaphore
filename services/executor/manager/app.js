@@ -4,13 +4,13 @@
 
 var express = require('express')
   , path = require('path');
-var conf = require('./conf');
+var config = require('../config');
 
 var app = express();
 
 app.configure(function(){
-  app.set('port', process.env.PORT || 3000);
-  app.set('views', __dirname + '/views');
+  app.set('port', config.port);
+  app.set('views', path.join(__dirname, '/views'));
   app.set('view engine', 'ejs');
   app.use(express.favicon());
   app.use(express.logger('dev'));
@@ -21,7 +21,7 @@ app.configure(function(){
   app.use(app.router);
   app.use(require('less-middleware')({ src: __dirname + '/public' }));
   app.use(express.static(path.join(__dirname, 'public')));
-  app.use('/files', express.static(conf.pathJobData));
+  //app.use('/files', express.static(config.pathJobData));
 });
 
 app.configure('development', function(){

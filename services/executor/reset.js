@@ -1,6 +1,6 @@
 var exec = require('child_process').exec;
 var fsx = require('jsx').fsx;
-var conf = require('./conf');
+var conf = require('./config');
 var path = require('path');
 
 process.stdout.write('This will clean up all the data. Proceed? (y/n)');

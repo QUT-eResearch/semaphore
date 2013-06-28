@@ -1,29 +1,121 @@
+"use strict";
+
 var path = require('path');
-var conf = {};
+var logLevel = 'debug'; //debug,info,warn,error,fatal
+var logger = require('jsx').createLogger(module).setLevel(logLevel);
 
-//conf.pathBaseData = '/data';
-conf.host = 'localhost:3000';
-conf.pathBaseData = 'C:\\temp';
-conf.pathTempUpload = path.join(conf.pathBaseData, 'upload');
-conf.pathJobData = path.join(conf.pathBaseData, 'jobs');
-conf.urlJobData = 'http://'+conf.host+'/files/';
+var config = module.exports = {};
 
-conf.getPathToJobDataFile = function(jobId, fileName) {
-  return path.join(conf.pathJobData, jobId, fileName)
+config.appName = 'Semaphore Executor Service';
+config.appVersion = '0.0.1';
+
+var env = process.env;
+if (!env.OS_USERNAME || !env.OS_PASSWORD || !env.OS_TENANT_NAME || !env.OS_TENANT_NAME || !env.OS_TENANT_ID) {
+  logger.fatal('The environment must be set for: OS_USERNAME, OS_PASSWORD, OS_TENANT_ID, OS_TENANT_NAME, OS_AUTH_URL');
+  process.exit(1);
 }
-conf.getUrlToJobDataFile = function(jobId, fileName) {
-  return conf.urlJobData + jobId + '/' + fileName;
-}
+var storage = config.storage = {};
+storage.container = 'Semaphore.Jobs';
+storage.inputPrefix = 'input';
+storage.outputPrefix = 'output';
+storage.uploadRepeatInterval = 2000;
+var auth = storage.auth = {};
+auth.username = env.OS_USERNAME || '';
+auth.password = env.OS_PASSWORD || '';
+auth.tenantId = env.OS_TENANT_ID || '';
+auth.tenantName = env.OS_TENANT_NAME || '';
+auth.url = env.OS_AUTH_URL || '';
+auth.serviceName = 'Object Storage Service';
+auth.region = 'Qld';
 
-conf.jobTypes = {
+//config.pathBaseData = '/data';
+config.host = process.env.SEMAPHORE_SERVICES_HOST || 'localhost';
+config.port = process.env.SEMAPHORE_SERVICES_PORT || '3002';
+
+config.pathBaseData = '/home/nodejs/data';
+config.pathTempUpload = path.join(config.pathBaseData, 'upload');
+config.pathJobData = path.join(config.pathBaseData, 'jobs');
+config.pathBaseExtCmd = '/home/nodejs/models'; //used by worker
+config.dirBin = 'bin'; //used by worker
+config.dirDefaultInput = 'default_input'; //used by worker
+
+config.urlManager = 'http://semaphore.n2o.net.au/ws/executor';
+config.urlJobData = 'http://semaphore.n2o.net.au/jobdata';
+
+config.getPathToJobDataFile = function(jobId, fileName) {
+  return path.join(config.pathJobData, jobId, fileName);
+};
+config.getUrlToJobDataFile = function(jobId, fileName) {
+  return config.urlJobData + '/' + jobId + '/' + fileName;
+};
+
+config.jobTypes = {
   century: 'century',
   daycent: 'daycent',
   kepler: 'kepler'
 };
 
-conf.str = {};
-conf.str.paramJsonInput = 'JsonInput';
-conf.str.paramJsonInputFiles = 'JsonInputFiles';
-conf.str.paramInputFiles = 'InputFiles';
+config.str = {};
+config.str.paramJsonInput = 'JsonInput';
+config.str.paramJsonInputFiles = 'JsonInputFiles';
+config.str.paramInputFiles = 'InputFiles';
 
-module.exports = conf;
+/**
+ * This app assumes that all external programs are configures as follows:
+ * executable path is baseDir + models[?] + binDir
+ * prepScript and runScript is relative to the executable path
+ * defaultInputDir is relative to the baseDir + models[?]
+ * Use double backslash to separate paths in Windows `\\`
+ */
+
+var worker = config.worker = {};
+worker.pathTemp = '/home/nodejs/data/workers'; //used by worker
+worker.pathApi = '/api/1/worker';
+worker.downloadBaseUrl = config.urlJobData;
+
+worker.manager = {};
+worker.manager.host = config.urlManager;
+worker.manager.url = {};
+var managerUrlBase = worker.manager.url.base = worker.manager.host + worker.pathApi;
+worker.manager.url.connect = managerUrlBase + '/connect'; // for websocket
+worker.manager.url.register = managerUrlBase + '/register'; //used for pushing the jobs to the workers
+worker.manager.url.process = managerUrlBase + '/process'; //Workers pull the job from manager
+worker.manager.url.update = managerUrlBase + '/update'; //progress update and heartbeat, pull method must periodically report for heartbeat
+worker.manager.url.end = managerUrlBase + '/end'; //notify manager if the job processing is finished
+worker.manager.url.upload = managerUrlBase + '/upload';
+
+/** 
+ * Supported methods: 
+ *   'push' - A job is pushed from the manager server. Worker must register to the manager first and provide a public web API
+ *   'pull' - A worker pulls a job from the manager server and is responsible to periodically checking for a new job
+ *   'poll' - A push strategy implemented using http long polling
+ *   'redis' - Connect directly to the redis port on the manager server
+ */
+worker.protocol = 'redis';
+worker.protocols = {};
+worker.protocols.redis = { manager: {host: '115.146.86.241', port: 6379, redis:{max_attempts:7}} };
+worker.protocols.pull = { manager: worker.manager, repeatInterval: 2000 };
+worker.protocols.push = { manager: worker.manager, pathBase: '/api/jobs/' };
+worker.protocols.poll = { manager: worker.manager, pathBase: '/api/jobs/' };
+
+var executors = worker.executors = {};
+
+var centCommon = {
+  pathBase: config.pathBaseExtCmd,
+  dirBin: config.dirBin,
+  dirDefaultInput: config.dirDefaultInput,
+  outvars: 'outvars.txt'
+};
+
+executors.century = Object.create(centCommon);
+executors.century.executor = 'CenturyExecutor';
+executors.century.name = 'century';
+executors.century.list100 = executors.century.name + '_list100';
+
+executors.daycent = Object.create(centCommon);
+executors.daycent.executor = 'CenturyExecutor';
+executors.daycent.name = 'daycent';
+executors.daycent.list100 = executors.daycent.name + '_list100';
+
+executors.kepler = {};
+

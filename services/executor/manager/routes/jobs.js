@@ -1,3 +1,4 @@
+/** Provide user interface to submit a new job and list, view and modify existing job */
 module.exports = function(rel) {
 
   /** List all jobs */

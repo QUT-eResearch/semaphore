@@ -1,4 +1,5 @@
-/*!
+"use strict";
+/**
  * Semaphore CLI-wrapper web service Worker node.
  * The worker node process the job collected and queued by the manager node.
  * All communications with the manager node are performed using HTTP RESTful API.
@@ -8,10 +9,16 @@ var path = require('path');
 var fs = require('fs');
 var request = require('request');
 var fsx = require('jsx').fsx;
-var logger = require('jsx').Logger(module);
-var conf = require('./conf');
-var Manager = require('./methods/'+conf.transportMethod);
-var manager = new Manager();
+var logger = require('jsx').createLogger(module);
+var config = require('../config').worker;
+var manager = require('./protocols/'+config.protocol)(config.protocols[config.protocol]);
+var executors = require('./executors.js')(config.executors).instances;
+var openstack = require('openstack');
+var storageConfig = require('../config').storage;
+var swift = openstack.createClient(storageConfig.auth);
+var container = storageConfig.container;
+var outputPrefix = storageConfig.outputPrefix;
+var uploadRepeatInterval = storageConfig.uploadRepeatInterval;
 
 var uid;
 var workingDir, workingDirPre, workingDirPost, jobPath;
@@ -29,14 +36,14 @@ var PROGRESS = {
 logger.debug("worker pid:"+process.pid);
 
 function shutdown() {
-  logger.debug('Worker' + uid + ': shutdown()');
+  logger.debug('Worker ' + uid + ': shutdown()');
   shutdownRequested = true;
   manager.disconnect();
 }
 
-process.on('disconnect', function() { logger.debug('Worker' + uid + ': disconnect'); shutdown(); });
-process.on('SIGTERM', function() { logger.debug('Worker' + uid + ': SIGTERM'); shutdown(); });
-process.on('SIGINT', function() { logger.debug('Worker' + uid + ': SIGINT'); shutdown(); });
+process.on('disconnect', function() { logger.debug('Worker ' + uid + ': disconnect'); shutdown(); });
+process.on('SIGTERM', function() { logger.debug('Worker ' + uid + ': SIGTERM'); shutdown(); });
+process.on('SIGINT', function() { logger.debug('Worker ' + uid + ': SIGINT'); shutdown(); });
 process.on('uncaughtException', function(err) { logger.error(err); });
 
 process.on('message', function(msg) {
@@ -49,7 +56,7 @@ process.on('message', function(msg) {
 
 // Retrieve a previous interrupted job or request a new one from the job queue
 function start() {
-  workingDir = path.join(conf.tempWorkingDir, ''+uid);
+  workingDir = path.join(config.pathTemp, ''+uid);
   workingDirPre = path.join(workingDir, 'pre');
   workingDirPost = path.join(workingDir, 'post');
   jobPath = path.join(workingDir,'job.json');
@@ -66,14 +73,15 @@ function start() {
       fsx.sync.remove(workingDir);
     }
   }
-  manager.connect();
-  if (job) {
-    executor = conf.executors[job.type];
-    if (job.runStatus) PROGRESS[job.runStatus.code].fn();
-  } else {
-    // Signal that the worker is ready to accept new job from the manager
-    manager.accept(startNewJob);
-  }
+  manager.connect(function(){
+    if (job) {
+      executor = executors[job.type];
+      if (job.runStatus) PROGRESS[job.runStatus.code].fn();
+    } else {
+      // Signal that the worker is ready to accept new job from the manager
+      manager.accept(startNewJob);
+    }
+  });
 }
 
 function updateJobStatus(statusCode, nextStepCb) {
@@ -82,7 +90,8 @@ function updateJobStatus(statusCode, nextStepCb) {
   fsx.async.writeJson(jobPath, job, function(err) {
     if (err) {
       logger.fatal('Error saving job info as JSON.');
-      process.exit;
+      logger.fatal(err);
+      process.exit();
     } else {
       process.nextTick(nextStepCb);
     }
@@ -95,7 +104,8 @@ function startNewJob(newJob){
   fs.mkdirSync(workingDir);
   logger.debug('startNewJob()');
   job = newJob;
-  executor = conf.executors[job.type];
+  job.data = typeof job.data === 'object' ? job.data : {};
+  executor = executors[job.type];
   updateJobStatus(1, function() {
     manager.confirm(job.id, fetchInputs);
   });
@@ -104,6 +114,9 @@ function startNewJob(newJob){
 // Download the supplied remote input files to the working dir
 function fetchInputs() {
   logger.debug('STEP 1 - fetchInputs()');
+  //notify the job submitter
+  if (job.data.onRun) request.put(job.data.onRun);
+  
   // Use fresh directory
   fsx.sync.createDir(workingDirPre);
   
@@ -119,7 +132,7 @@ function fetchInputs() {
   function downloadComplete() { 
     --count;
     logger.debug('Download completed. count=' + count);
-    if (count == 0) updateJobStatus(2, setupPostDir);
+    if (count === 0) updateJobStatus(2, setupPostDir);
   }
 
   if (count === 0)  updateJobStatus(2, setupPostDir);
@@ -132,7 +145,7 @@ function setupPostDir() {
   fsx.sync.createDir(workingDirPost);
   
   var params = {inputDir: executor.defaultInputPath, preDir:workingDirPre, postDir:workingDirPost};
-  conf.copyExecutor.run(params, function(err, stdout, stderr){
+  executors.copy.run(params, function(err, stdout, stderr){
     if (err) {
       logger.error('Error in setting up post temp dir.');
       logger.error(err);
@@ -141,21 +154,6 @@ function setupPostDir() {
       updateJobStatus(3, execute);
     }
   });
-  //var cpe = exec('copy ', options, cb1);
-  /*
-  // Copy (link) files from default inputs and pre dir
-  fu.forEachFileInDir(workingDirPre, function(file) {
-    //change this for linux
-    //fs.symlinkSync(file.fullpath, path.join(workingDirPost, file.name));
-    fs.copyFileSync(file.fullpath, path.join(workingDirPost, file.name));
-  });
-  var defInputPath  = conf.jobTypes.daycent.paths.defaultInput;
-  fu.forEachFileInDir(model.paths.defaultInput, function(file) {
-    //change this for linux
-    //fs.symlinkSync(file.fullpath, path.join(workingDirPost, file.name));
-    fs.copyFileSync(file.fullpath, path.join(workingDirPost, file.name));
-  });
-   */
 }
 
 function execute() {
@@ -165,9 +163,12 @@ function execute() {
     data: job.data
     //prevOutputName
   };
+  
   executor.run(params, function(err, stdout, stderr){
     if (err) {
-      logger.error('Error in executing external commands.');
+      job.data.errors = job.data.errors || [];
+      job.data.errors.push(err.toString());
+      //logger.error('Error in executing external commands.');
       updateJobStatus(5, cleanup);
     } else {
       updateJobStatus(4, storeOutputs);
@@ -184,46 +185,50 @@ function storeOutputs() {
   });
   var count = 0;
   var files = {};
-  function uploadFile(f) {
-    // upload/save/store output file to external storage
-    logger.debug('Uploading output file: ' + f.path);
-    var url = conf.manager.url.upload + '/'+job.id+'/'+f.name;
-    var urldl = conf.downloadBaseUrl + '/' + job.id + '/' + f.name;
-    var headers = {"content-length": f.stat.size};
-    logger.debug(url);
-    var rs = fs.createReadStream(f.path);
-    rs.pipe(request.put({url:url, headers: headers}, uploadComplete));
-    function uploadComplete(error, response, body) {
-      if (!error && response.statusCode == 200) {
-        logger.debug('Upload completed: ' + f.path);
-        files[f.name] = urldl;
-        --count;
-        if (count === 0) {
-          job.data.outputFiles = files;
-          // Notify manager that job is done
-          logger.debug('All uploads completed, report back to manager.');
-          updateJobStatus(5, function() {
-            manager.done(job, cleanup);
-          });
-        }
-      } else {
-        //TODO: robust upload
-        logger.error('Upload failed: ' + f.path);
-        // Upload failed, try again later
-        setTimeout(function(){ uploadFile(f); }, conf.repeatInterval);
-      }
-    }
-  }
   fsx.sync.forEachFile(workingDirPost, function(f){
     if (inputFiles.indexOf(f.name) < 0) {
       ++count;
       uploadFile(f);
     }
   });
+  function uploadFile(f) {
+    // upload/save/store output file to external storage (openstack swift)
+    logger.debug('Uploading output file: %s', f.path);
+    //var url = config.manager.url.upload + '/'+job.id+'/'+f.name;
+    var remotePath = job.data.outputFilesPath || ( container + '/' +  job.id + '/' + outputPrefix );
+    remotePath = remotePath + '/' + f.name;
+    var headers = {"content-length": f.stat.size};
+    logger.debug('remotePath: %s', remotePath);
+    swift.upload({local:f.path, remote:remotePath, headers:headers}, uploadComplete);
+    function uploadComplete(error, status, url) {
+      if (!error && (status >= 200 && status < 210)) {
+        logger.debug('Upload completed: ' + f.path);
+        files[f.name] = url;
+        --count;
+        if (count === 0) {
+          job.data.outputFiles = files;
+          // Notify manager that job is done
+          logger.debug('All uploads completed, report back to manager.');
+          updateJobStatus(5, function() { manager.done(job, cleanup); });
+        }
+      } else {
+        var reason = error ? error.toString() : ('status code = ' + status);
+        logger.error('Upload file `%s` failed: %s', f.path, reason);
+        job.data.errors = job.data.errors || [];
+        job.data.errors.push('Failed to upload output to `%s` : %s', url, reason);
+        //TODO: robust upload
+        // Upload failed, try again later
+        //setTimeout(function(){ uploadFile(f); }, uploadRepeatInterval);
+      }
+    }
+  }
 }
 
 function cleanup() {
   logger.debug('STEP 5 - start cleanup()');
+  //notify the job submitter
+  if (job.data.onEnd) request.put({url:job.data.onEnd, json:job.data});
+  
   //remove working dir
   fsx.async.remove(workingDir, function(err) {
     logger.debug('cleanup() finished');
