@@ -1,13 +1,35 @@
 Attribute VB_Name = "ModuleImport"
-Public CenturyFiles
+'Public CenturyFiles
 Public DaycentFiles
+Public LastModel As String
 Public LastDir As String
 Public LastLis As String
+Public LastModelDocProp As DocumentProperty
+Public LastDirDocProp As DocumentProperty
+Public LastLisDocProp As DocumentProperty
 
 Sub Init()
-    LastDir = ""
-    LastLis = ""
-    CenturyFiles = Array("A", "B")
+    On Error Resume Next
+    Set LastModelDocProp = ActiveWorkbook.CustomDocumentProperties("ModelName")
+    Set LastDirDocProp = ActiveWorkbook.CustomDocumentProperties("ModelOutputDirectory")
+    Set LastLisDocProp = ActiveWorkbook.CustomDocumentProperties("LisOutputName")
+    If Err.Number > 0 Then
+        LastModel = "century"
+        LastDir = ""
+        LastLis = ""
+        ActiveWorkbook.CustomDocumentProperties.Add Name:="ModelName", LinkToContent:=False, Type:=msoPropertyTypeString, Value:=LastModel
+        ActiveWorkbook.CustomDocumentProperties.Add Name:="ModelOutputDirectory", LinkToContent:=False, Type:=msoPropertyTypeString, Value:=LastDir
+        ActiveWorkbook.CustomDocumentProperties.Add Name:="LisOutputName", LinkToContent:=False, Type:=msoPropertyTypeString, Value:=LastLis
+        Set LastModelDocProp = ActiveWorkbook.CustomDocumentProperties("ModelName")
+        Set LastDirDocProp = ActiveWorkbook.CustomDocumentProperties("ModelOutputDirectory")
+        Set LastLisDocProp = ActiveWorkbook.CustomDocumentProperties("LisOutputName")
+    Else
+        LastModel = LastModelDocProp.Value
+        LastDir = LastDirDocProp.Value
+        LastLis = LastLisDocProp.Value
+    End If
+        
+    'CenturyFiles = Array("A", "B")
     DaycentFiles = Array("bio.out", "soiln.out", "soiltavg.out", "soiltmax.out", _
         "soiltmin.out", "stemp_dx.out", "vswc.out", "watrbal.out", "wfps.out", _
         "co2.out", "wflux.out", "mresp.out", "year_summary.out", _
@@ -23,6 +45,11 @@ Sub RibbonImportButton(ByVal control As IRibbonControl)
 '
     FormImport.Show
 End Sub
+
+Sub RibbonUpdateButton(ByVal control As IRibbonControl)
+    ImportData
+End Sub
+
 
 Function SheetExists(SheetsObject As Sheets, Sheetname As String) As Boolean
     SheetExists = False
@@ -72,11 +99,11 @@ Sub ImportData()
     Set wb = ActiveWorkbook
 
     Dim LisFilePath As String
-    LisFilePath = FormImport.TextBoxDir & "\" & FormImport.TextBoxLis & ".lis"
+    LisFilePath = LastDir & "\" & LastLis & ".lis"
 
     ImportFileToSheet LisFilePath, wb, ".lis"
 
-    If FormImport.OptionDaycent.Value Then
+    If LastModel = "daycent" Then
         'Debug.Print "daycent"
         Dim FName As String
         For Each fn In DaycentFiles
@@ -88,4 +115,9 @@ Sub ImportData()
 
         Next fn
     End If
+    
+    LastModelDocProp.Value = LastModel
+    LastDirDocProp.Value = LastDir
+    LastLisDocProp.Value = LastLis
+    
 End Sub
