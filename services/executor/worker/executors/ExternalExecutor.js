@@ -34,12 +34,15 @@ function ExternalExecutor(cmds, args) {
 ExternalExecutor.str = str;
 var p = ExternalExecutor.prototype;
 
-p.isValid = function() {
-  for (var i=0; i<this.cmds.length; ++i) {
-    var cmd = this.cmds[i];
-    if (!fs.existsSync(cmd)) return false;
+p.isValid = function(index) {
+  if (index != null && index >= 0 && index < this.cmds.length) {
+    return fs.existsSync(this.cmds[index]);
+  } else {
+    for (var i=0; i<this.cmds.length; ++i) {
+      if (!fs.existsSync(this.cmds[i])) return false;
+    }
+    return true;
   }
-  return true;
 };
 
 /** must return array, otherwise command will not be executed */

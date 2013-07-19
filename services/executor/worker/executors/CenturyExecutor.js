@@ -15,16 +15,17 @@ function CenturyExecutor(options) {
   this.name = options.name;
   if (options.dirDefaultInput) this.defaultInputPath = path.join(base, options.dirDefaultInput);
   this.outvars = options.outvars || '';
-  var cmds = ['',''];
-  cmds[0] = path.join(bin, options.name + str.ext);
-  cmds[1] = path.join(bin, options.list100 + str.ext);
+  var cmds = [];
+  cmds.push('rm');
+  cmds.push(path.join(bin, options.name + str.ext));
+  cmds.push(path.join(bin, options.list100 + str.ext));
   ExternalExecutor.call(this, cmds);
 }
 var p = CenturyExecutor.prototype = Object.create(ExternalExecutor.prototype);
 
 p.isValid = function() {
   if (!this.defaultInputPath || !fs.existsSync(this.defaultInputPath)) logger.warn(this.name + ' - dirDefaultInput is invalid: ' + this.defaultInputPath);
-  return ExternalExecutor.prototype.isValid.call(this);
+  return ExternalExecutor.prototype.isValid.call(this, 1) && ExternalExecutor.prototype.isValid.call(this, 2);
 };
 
 /** 
@@ -43,9 +44,10 @@ p.getCmdArgs = function(params) {
   if (!scheduleFile) {
     throw new Error('Please provide valid inputs to run CENTURY/DAYCENT.');
   }
-  var args = ['',''];
+  var args = [];
   var extParam = prevBinaryFile ? (' -e ' + prevBinaryFile) : '';
-  args[0] = '-s ' + scheduleFile + ' -n ' + scheduleFile + extParam + str.logOutputs;
-  args[1] = scheduleFile + ' ' + scheduleFile + ' ' + this.outvars + str.logOutputs;
+  args.push(scheduleFile + '.bin');
+  args.push('-s ' + scheduleFile + ' -n ' + scheduleFile + extParam + str.logOutputs);
+  args.push(scheduleFile + ' ' + scheduleFile + ' ' + this.outvars + str.logOutputs);
   return args;
 };

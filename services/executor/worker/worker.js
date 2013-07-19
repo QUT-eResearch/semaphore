@@ -24,6 +24,7 @@ var uid;
 var workingDir, workingDirPre, workingDirPost, jobPath;
 var job, executor;
 var shutdownRequested = false;
+var callbackHeaders = {'experiment-run-token':'@BcD3fG'};
 
 var PROGRESS = {
   1: {fn:fetchInputs, message: 'fetching inputs'}, //job received
@@ -115,7 +116,7 @@ function startNewJob(newJob){
 function fetchInputs() {
   logger.debug('STEP 1 - fetchInputs()');
   //notify the job submitter
-  if (job.data.onRun) request.put(job.data.onRun);
+  if (job.data.onRun) request.put({url:job.data.onRun, headers:callbackHeaders});
   
   // Use fresh directory
   fsx.sync.createDir(workingDirPre);
@@ -146,6 +147,8 @@ function setupPostDir() {
   
   var params = {inputDir: executor.defaultInputPath, preDir:workingDirPre, postDir:workingDirPost};
   executors.copy.run(params, function(err, stdout, stderr){
+    updateJobStatus(3, execute);
+    /*
     if (err) {
       logger.error('Error in setting up post temp dir.');
       logger.error(err);
@@ -153,6 +156,7 @@ function setupPostDir() {
     } else {
       updateJobStatus(3, execute);
     }
+    */
   });
 }
 
@@ -169,7 +173,7 @@ function execute() {
       job.data.errors = job.data.errors || [];
       job.data.errors.push(err.toString());
       //logger.error('Error in executing external commands.');
-      updateJobStatus(5, cleanup);
+      //updateJobStatus(5, cleanup);
     } else {
       updateJobStatus(4, storeOutputs);
     }
@@ -227,7 +231,7 @@ function storeOutputs() {
 function cleanup() {
   logger.debug('STEP 5 - start cleanup()');
   //notify the job submitter
-  if (job.data.onEnd) request.put({url:job.data.onEnd, json:job.data});
+  if (job.data.onEnd) request.put({url:job.data.onEnd, headers:callbackHeaders, json:job.data});
   
   //remove working dir
   fsx.async.remove(workingDir, function(err) {
