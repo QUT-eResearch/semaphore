@@ -4,8 +4,12 @@ Semaphore
 Semaphore is a collection of tools to assist in (semi-)automating the process of modelling and analysing ecosystem dynamics using Australian data. The process involves data transformations, model execution and calibration, and result verification.
 More information can be found in our blog http://semaphoreblog.wordpress.com
 
-All files and codes contained in this repository are all initial results of an ongoing project. They are considered as an pre-alpha release.
-Different components are organised to main sub directories under this repository:
+The hightlight of Sempahore is a [workflow management system](http://semaphore.n2o.net.au) that provides a web interface for user to manage and run experiments online. 
+The workflow management system requires the execution service component contained in this repository. 
+The source code for the workflow management system can be accessed from a seperate GitHub repository:
+https://github.com/QUT-IFE-eResearch/semaphore_wms
+
+Different components are organised into main sub directories under this repository:
 
 ##1. execution-service
 The modelling of Carbon and Nitrogen dynamics in the ecosystem involves running a simulation program such as Century (www.nrel.colostate.edu/projects/century). Normally, a researcher needs to download or request such program, install, and run it on their computer.
@@ -22,7 +26,11 @@ This tool provides an add-ins that can be accessed form the ribbon interface (to
 
 
 ## Acknowledgment
-This project is supported by the Australian National Data Service (ANDS) through the National Collaborative Research Infrastructure Strategy Program and the Education Investment Fund (EIF) Super Science Initiative.
+This project is supported by the Australian National Data Service (ANDS). 
+ANDS is supported by the Australian Government through the National Collaborative Research Infrastructure Strategy
+(NCRIS) Program and the Education Investment Fund (EIF) Super Science Initiative. 
+The software is developed in conjunction with Queensland University of Technology (QUT) 
+and The Australian Centre for Ecological Analysis and Synthesis (ACEAS).
 
 
 ## License 
