@@ -12,8 +12,7 @@ To run the service on a server or local computer you will need to have:
 - [Daycent](http://www.nrel.colostate.edu/projects/daycent/)
 
 ## Installation
-
-    $ npm install semaphore
+Please refer to the [deployment guide](https://github.com/QUT-IFE-eResearch/semaphore/wiki/Semaphore-Web-Application-Deployment-Guide)
 
 ## Features
 
