@@ -1,17 +1,18 @@
 Semaphore
 =========
 
-Semaphore is a collection of tools to assist in (semi-)automating the process of modelling and analysing ecosystem dynamics using Australian data. The process involves data transformations, model execution and calibration, and result verification.
+Semaphore is a collection of tools to assist in (semi-)automating the process of modelling and analysing ecosystem dynamics using Australian data. 
+The process involves data transformations, model execution and calibration, and result verification.
 More information can be found in our blog http://semaphoreblog.wordpress.com
 
 The hightlight of Sempahore is a [workflow management system](http://semaphore.n2o.net.au) that provides a web interface for user to manage and run experiments online. 
-The workflow management system requires the execution service component contained in this repository. 
+The workflow management system requires the [execution service](https://github.com/QUT-IFE-eResearch/semaphore/tree/master/services/executor) component contained in this repository. 
 The source code for the workflow management system can be accessed from a seperate GitHub repository:
 https://github.com/QUT-IFE-eResearch/semaphore_wms
 
-Different components are organised into main sub directories under this repository:
+This repository contains the source code of various tools organised into main sub directories:
 
-###1. execution-service
+###1. service/executor
 The modelling of Carbon and Nitrogen dynamics in the ecosystem involves running a simulation program such as Century (www.nrel.colostate.edu/projects/century). Normally, a researcher needs to download or request such program, install, and run it on their computer.
 This directory contains a web application that provide a HTTP RESTful interface to run a model simulation on the cloud without the need to download and install the program locally. This tool is basically a web service wrapper for the modelling software.
 
