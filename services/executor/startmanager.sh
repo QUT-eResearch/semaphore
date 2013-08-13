@@ -1,3 +1,3 @@
 #!/bin/bash
 # cd manager
-forever start -m 999 -l executor.manager.log -o manager.log -e manager.err.log -a manager/app.js
+forever start -m 7 -l ~/logs/executor.manager.log -o ~/logs/executor.manager.out.log -e ~/logs/executor.manager.err.log -a manager/app.js

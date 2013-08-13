@@ -24,25 +24,32 @@ protocol.validate = function(cb) {
   }
 };
 
+var baseConnect = protocol.connect;
 protocol.connect = function(cb) {
-  if (!protocol.jobs) {
-    protocol.jobs = new JobQueue(jqOptions, cb);
-  } else {
-    process.nextTick(cb);
-  }
+  baseConnect.call(this, function() {
+    if (!protocol.jobs) {
+      protocol.jobs = new JobQueue(jqOptions, cb);
+    } else {
+      process.nextTick(cb);
+    }
+  });
 };
 
 protocol.disconnect = function() {
-  protocol.jobs.quit();
-  delete protocol.jobs;
+  if (protocol.jobs) {
+    protocol.jobs.end();
+    delete protocol.jobs;
+  }
   isNew = true;
 };
 
 protocol.accept = function(cb) {
   processJob = cb;
   if (isNew) {
-    protocol.jobs.process(function(err, job, done) {
-      if (!err && job) {
+    protocol.jobs.process({timeout:jqOptions.manager.timeout}, function(err, job, done) {
+      if (err) {
+        done();
+      } else {
         doneCb = done;
         isDone = false;
         processJob(job);
@@ -65,7 +72,8 @@ protocol.done = function(job, cb) {
 };
 
 module.exports = function(options) {
-  jqOptions = options.manager;
+  jqOptions = options;
+  protocol.manager = options.manager;
   return protocol;
 };
 

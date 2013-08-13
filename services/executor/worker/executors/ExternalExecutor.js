@@ -84,7 +84,7 @@ p.run = function(params, onFinish) {
   }
   logger.debug('run cmd: '+cmd);
   if (cmd) {
-    var options = {};
+    var options = {killSignal: 'SIGKILL'};
     if (params.workDir) options.cwd = params.workDir;
     if (params.envVars) options.env = params.envVars;
     exec(cmd, options, onFinish);

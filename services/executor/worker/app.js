@@ -4,18 +4,13 @@
  */
 
 var cluster = require('cluster');
-//var request = require('request');
 var fs = require('fs');
 var path = require('path');
 var logger = require('jsx').createLogger(module);
 var fsx = require('jsx').fsx;
 var conf = require('../config').worker;
 
-var PORT = 33000;
-var HOST = '127.0.0.1';
-var numCpu = require('os').cpus().length;
-var numWorker = numCpu > 1 ? numCpu - 1 : 1;
-//var numWorker = 1;
+var numWorker = conf.processes;
 var shutdownWorkers = 0;
 var shutdownRequested = false;
 
@@ -93,7 +88,6 @@ logger.debug("master pid:"+process.pid);
       process.exit();
     });
   }
-//})(function(){});
 })(startWorkers);
 
 function startWorkers() {
@@ -109,24 +103,10 @@ function startWorkers() {
     worker.send(i);
     worker.uid = i;
   }
-  
-  // Create a tcp socket server to accept shutdown request
-  var net = require('net');
-  net.createServer(function(c) {
-    logger.info('SHUTDOWN request from: ' + c.remoteAddress +':'+ c.remotePort);
-    c.on('data', function(data) {
-      if (data.toString() == 'shutdown') {
-        shutdownRequested = true;
-        cluster.disconnect();
-      }
-    });
-  }).listen(PORT, HOST);
-  
 }
 
 cluster.on('exit', function(worker, code, signal) {
-  logger.info('worker ' + worker.uid + ' died.');
-  //logger.debug('code: '+code+' signal:'+signal);
+  logger.info('worker %d died: code=%s, signal=%s', worker.uid, code, signal);
   if (shutdownRequested || code === 0) {
     shutdownWorkers++;
   } else {
@@ -140,10 +120,17 @@ cluster.on('exit', function(worker, code, signal) {
     }, 3000);
   }
   
-  if (shutdownWorkers == numWorker) process.exit();
+  if (shutdownWorkers == numWorker) {
+    logger.info('No worker alive, exiting main app..');
+    process.exit();
+  }
 });
 
-cluster.on('listening', function(worker, address) {
-  logger.info("A worker is now connected to " + address.address + ":" + address.port);
-});
+process.once('SIGTERM', shutdown);
+process.once('SIGINT', shutdown);
 
+function shutdown() {
+  shutdownRequested = true;
+  logger.info('Shutting down Manager..');
+  cluster.disconnect();
+}

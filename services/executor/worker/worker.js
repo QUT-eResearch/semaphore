@@ -25,6 +25,7 @@ var workingDir, workingDirPre, workingDirPost, jobPath;
 var job, executor;
 var shutdownRequested = false;
 var callbackHeaders = {'experiment-run-token':'@BcD3fG'};
+var isWaitingForJob = false;
 
 var PROGRESS = {
   1: {fn:fetchInputs, message: 'fetching inputs'}, //job received
@@ -37,18 +38,21 @@ var PROGRESS = {
 logger.debug("worker pid:"+process.pid);
 
 function shutdown() {
-  logger.debug('Worker ' + uid + ': shutdown()');
   shutdownRequested = true;
-  manager.disconnect();
+  logger.info('Worker ' + uid + ': exited gracefully.');
+  if (isWaitingForJob) {
+    manager.disconnect();
+    process.exit();
+  }
 }
 
-process.on('disconnect', function() { logger.debug('Worker ' + uid + ': disconnect'); shutdown(); });
-process.on('SIGTERM', function() { logger.debug('Worker ' + uid + ': SIGTERM'); shutdown(); });
-process.on('SIGINT', function() { logger.debug('Worker ' + uid + ': SIGINT'); shutdown(); });
+process.on('disconnect', shutdown);
+process.on('SIGTERM', function() { logger.debug('Worker ' + uid + ': SIGTERM'); });
+process.on('SIGINT', function() { logger.debug('Worker ' + uid + ': SIGINT'); });
 process.on('uncaughtException', function(err) { logger.error(err); });
 
 process.on('message', function(msg) {
-  logger.debug("worker starting: uid="+msg);
+  logger.info("worker starting: uid="+msg);
   uid = msg;
   //Start processing after receiving uid
   process.nextTick(start);
@@ -74,15 +78,20 @@ function start() {
       fsx.sync.remove(workingDir);
     }
   }
-  manager.connect(function(){
+  manager.connect(function() {
     if (job) {
       executor = executors[job.type];
       if (job.runStatus) PROGRESS[job.runStatus.code].fn();
     } else {
-      // Signal that the worker is ready to accept new job from the manager
-      manager.accept(startNewJob);
+      requestNewJob();
     }
   });
+}
+
+function requestNewJob() {
+  // Signal that the worker is ready to accept new job from the manager
+  manager.accept(startNewJob);
+  isWaitingForJob = true;
 }
 
 function updateJobStatus(statusCode, nextStepCb) {
@@ -100,6 +109,9 @@ function updateJobStatus(statusCode, nextStepCb) {
 }
 
 function startNewJob(newJob){
+  isWaitingForJob = false;
+  if (!newJob) return shutdown();
+  
   logger.debug('Creating working dir: ' + workingDir);
   // Create temp working dir based on the uid
   fs.mkdirSync(workingDir);
@@ -172,11 +184,10 @@ function execute() {
     if (err) {
       job.data.errors = job.data.errors || [];
       job.data.errors.push(err.toString());
-      //logger.error('Error in executing external commands.');
+      logger.error('Error in executing external commands.');
       //updateJobStatus(5, cleanup);
-    } else {
-      updateJobStatus(4, storeOutputs);
     }
+    updateJobStatus(4, storeOutputs);
   });
 }
 
@@ -199,9 +210,15 @@ function storeOutputs() {
     // upload/save/store output file to external storage (openstack swift)
     logger.debug('Uploading output file: %s', f.path);
     //var url = config.manager.url.upload + '/'+job.id+'/'+f.name;
-    var remotePath = job.data.outputFilesPath || ( container + '/' +  job.id + '/' + outputPrefix );
-    remotePath = remotePath + '/' + f.name;
     var headers = {"content-length": f.stat.size};
+    var remotePath;
+    if (job.data && job.data.outputFilesPath) {
+      remotePath = job.data.outputFilesPath;
+    } else {
+      remotePath = container + '/' +  job.id + '/' + outputPrefix;
+      headers['X-Delete-After'] = '172800';
+    }
+    remotePath = remotePath + '/' + f.name;
     logger.debug('remotePath: %s', remotePath);
     swift.upload({local:f.path, remote:remotePath, headers:headers}, uploadComplete);
     function uploadComplete(error, status, url) {
@@ -238,7 +255,11 @@ function cleanup() {
     logger.debug('cleanup() finished');
     logger.debug('worker is idle');
     // Ready to accept another job
-    if (!shutdownRequested) manager.accept(startNewJob);
+    if (shutdownRequested) {
+      manager.disconnect();
+      process.exit();
+    } else {
+      process.nextTick(requestNewJob);
+    }
   });
 }
-

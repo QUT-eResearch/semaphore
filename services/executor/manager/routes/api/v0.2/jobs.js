@@ -77,7 +77,6 @@ module.exports = function (rel) {
     if (!rel.conf.jobTypes[type]) {
       return res.json({ error: 'Invalid job type.' });
     }
-
     var data = req.body.data;
     
     if (data && ((typeof data.input === 'object' && Object.keys(data.input).length > 0) || (typeof data.inputFiles === 'object' && Object.keys(data.inputFiles).length > 0))) {
